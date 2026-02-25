@@ -3,33 +3,37 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Oslo T-bane Live — Real-time metro map</title>
-<meta name="description" content="Live Oslo metro map with real-time train positions and departure boards">
+<title>Oslo Live Transit</title>
+<meta name="description" content="Live Oslo metro and tram map with real-time positions and departures">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Bebas+Neue&display=swap" rel="stylesheet">
 <style>
-/* ─────────────────────────── RESET & TOKENS ─────────────────────────── */
 *,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
 :root{
   --bg:#070a11;
   --panel:rgba(9,13,22,0.96);
   --surface:rgba(14,20,34,0.9);
   --border:rgba(255,255,255,0.07);
-  --border2:rgba(255,255,255,0.13);
+  --border2:rgba(255,255,255,0.14);
   --txt:#e0eaf8;
   --muted:#516070;
   --accent:#d4f53c;
   --warn:#f97316;
   --ok:#34d399;
-  --l1:#f43f5e; --l2:#fb923c; --l3:#4ade80; --l4:#38bdf8; --l5:#c084fc;
   --font:'Space Grotesk',system-ui,sans-serif;
-  --mono:'Space Grotesk',monospace;
+
+  /* Metro line colours */
+  --m1:#f43f5e; --m2:#fb923c; --m3:#4ade80; --m4:#38bdf8; --m5:#c084fc;
+
+  /* Tram line colours */
+  --t12:#facc15; --t13:#f97316; --t15:#e879f9;
+  --t17:#22d3ee; --t18:#a3e635; --t19:#f43f5e;
 }
 html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);color:var(--txt);font-family:var(--font)}
 
-/* ─────────────────────────── MAP ─────────────────────────── */
+/* MAP */
 #map{position:fixed;inset:0;z-index:0}
 .leaflet-container{background:#07090f !important}
 .leaflet-control-zoom a{background:var(--surface) !important;color:var(--txt) !important;border-color:var(--border2) !important}
@@ -37,7 +41,7 @@ html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);color:var(
 .leaflet-control-attribution{background:rgba(0,0,0,.5) !important;color:var(--muted) !important;font-size:9px !important;backdrop-filter:blur(4px)}
 .leaflet-control-attribution a{color:var(--muted) !important}
 
-/* ─────────────────────────── TOPBAR ─────────────────────────── */
+/* TOP BAR */
 #topbar{
   position:fixed;top:0;left:0;right:0;z-index:600;
   height:52px;display:flex;align-items:center;gap:12px;padding:0 16px;
@@ -53,8 +57,7 @@ html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);color:var(
   display:flex;align-items:center;gap:5px;
   background:rgba(212,245,60,.08);border:1px solid rgba(212,245,60,.2);
   border-radius:100px;padding:3px 8px;font-size:10px;font-weight:600;
-  color:var(--accent);letter-spacing:.5px;text-transform:uppercase;white-space:nowrap;
-  flex-shrink:0
+  color:var(--accent);letter-spacing:.5px;text-transform:uppercase;white-space:nowrap;flex-shrink:0
 }
 .pulse{width:5px;height:5px;border-radius:50%;background:var(--accent);animation:pulse 1.6s ease-in-out infinite}
 @keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.3;transform:scale(.7)}}
@@ -69,42 +72,62 @@ html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);color:var(
 }
 #search-input:focus{border-color:rgba(212,245,60,.4);background:rgba(255,255,255,.06)}
 #search-input::placeholder{color:var(--muted)}
-.search-icon{
-  position:absolute;left:10px;top:50%;transform:translateY(-50%);
-  color:var(--muted);font-size:14px;pointer-events:none
-}
+.search-icon{position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--muted);font-size:14px;pointer-events:none}
 #search-results{
   display:none;position:absolute;top:calc(100% + 6px);left:0;right:0;
   background:var(--panel);border:1px solid var(--border2);border-radius:10px;
-  overflow-y:auto;max-height:280px;z-index:700;
-  box-shadow:0 8px 32px rgba(0,0,0,.5)
+  overflow-y:auto;max-height:280px;z-index:700;box-shadow:0 8px 32px rgba(0,0,0,.5)
 }
 #search-results.open{display:block}
 .sr-item{
   display:flex;align-items:center;justify-content:space-between;
   padding:10px 14px;cursor:pointer;transition:background .15s;
-  border-bottom:1px solid var(--border)
+  border-bottom:1px solid var(--border);gap:8px
 }
 .sr-item:last-child{border-bottom:none}
 .sr-item:hover{background:rgba(255,255,255,.04)}
-.sr-name{font-size:13px;font-weight:500}
-.sr-badges{display:flex;gap:3px}
-.lbadge{
-  width:18px;height:18px;border-radius:50%;font-size:9px;font-weight:700;
-  display:flex;align-items:center;justify-content:center;color:#fff;flex-shrink:0
-}
+.sr-name{font-size:13px;font-weight:500;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sr-mode{font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;flex-shrink:0}
+.sr-badges{display:flex;gap:3px;flex-shrink:0}
+.lbadge{width:18px;height:18px;border-radius:50%;font-size:9px;font-weight:700;display:flex;align-items:center;justify-content:center;color:#fff;flex-shrink:0}
+.lbadge.tram{border-radius:3px}
 
 #topbar-right{display:flex;align-items:center;gap:10px;margin-left:auto;flex-shrink:0}
-.countdown{
-  display:flex;align-items:center;gap:6px;font-size:11px;color:var(--muted)
-}
+.countdown{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--muted)}
 .cd-track{width:40px;height:2px;background:rgba(255,255,255,.1);border-radius:1px;overflow:hidden}
 .cd-fill{height:100%;background:var(--accent);border-radius:1px;transition:width 1s linear}
 
-/* ─────────────────────────── LEFT PANEL (lines) ─────────────────────────── */
-#lines-panel{
+/* ── LEFT PANEL ── */
+#side-panel{
   position:fixed;left:12px;top:64px;z-index:500;
-  display:flex;flex-direction:column;gap:5px
+  display:flex;flex-direction:column;gap:8px;
+  max-height:calc(100vh - 76px);overflow-y:auto
+}
+#side-panel::-webkit-scrollbar{width:0}
+
+/* MODE SWITCHER */
+#mode-switcher{
+  background:var(--panel);border:1px solid var(--border);
+  border-radius:10px;backdrop-filter:blur(12px);
+  padding:4px;display:flex;gap:3px
+}
+.mode-btn{
+  flex:1;padding:5px 12px;border-radius:7px;border:none;
+  font-family:var(--font);font-size:11px;font-weight:600;
+  cursor:pointer;transition:all .2s;color:var(--muted);background:transparent;
+  display:flex;align-items:center;justify-content:center;gap:5px;
+  white-space:nowrap
+}
+.mode-btn.active{background:var(--accent);color:#000}
+.mode-btn:not(.active):hover{background:rgba(255,255,255,.06);color:var(--txt)}
+.mode-icon{font-size:13px}
+
+/* LINE FILTERS */
+#lines-container{display:flex;flex-direction:column;gap:4px}
+.filter-section{display:flex;flex-direction:column;gap:3px}
+.filter-section-label{
+  font-size:9px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;
+  color:var(--muted);padding:0 4px;margin-top:4px
 }
 .line-filter{
   display:flex;align-items:center;gap:8px;
@@ -114,32 +137,29 @@ html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);color:var(
   transition:opacity .2s,border-color .2s;white-space:nowrap
 }
 .line-filter:hover{border-color:var(--border2)}
-.line-filter.hidden{opacity:.25}
+.line-filter.off{opacity:.25}
 .lf-num{
-  width:22px;height:22px;border-radius:50%;font-size:12px;font-weight:700;
+  width:22px;height:22px;font-size:11px;font-weight:700;
   display:flex;align-items:center;justify-content:center;color:#fff;flex-shrink:0
 }
+.lf-num.metro{border-radius:50%}
+.lf-num.tram{border-radius:3px}
 .lf-label{font-size:11px;font-weight:500;color:var(--muted)}
 
-/* ─────────────────────────── RIGHT PANEL (stats) ─────────────────────────── */
+/* STATS PANEL */
 #stats-panel{
-  position:fixed;right:12px;top:64px;z-index:500;
   background:var(--panel);border:1px solid var(--border);
-  border-radius:12px;padding:14px 16px;backdrop-filter:blur(12px);
-  min-width:160px;
+  border-radius:12px;padding:12px 14px;backdrop-filter:blur(12px);
 }
-.sp-title{
-  font-size:9px;font-weight:700;letter-spacing:2px;text-transform:uppercase;
-  color:var(--accent);margin-bottom:12px
-}
-.sp-row{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;font-size:12px}
+.sp-title{font-size:9px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--accent);margin-bottom:10px}
+.sp-row{display:flex;justify-content:space-between;align-items:center;margin-bottom:7px;font-size:12px}
 .sp-row:last-child{margin-bottom:0}
 .sp-label{color:var(--muted);font-weight:500}
 .sp-val{color:var(--txt);font-weight:700}
 .sp-val.ok{color:var(--ok)}
 .sp-val.warn{color:var(--warn)}
 
-/* ─────────────────────────── BOTTOM STATION DRAWER ─────────────────────────── */
+/* BOTTOM DRAWER */
 #drawer{
   position:fixed;bottom:0;left:0;right:0;z-index:600;
   background:var(--panel);backdrop-filter:blur(24px);
@@ -148,7 +168,6 @@ html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);color:var(
   display:flex;flex-direction:column;max-height:56vh;
 }
 #drawer.open{transform:translateY(0)}
-
 #drawer-header{
   display:flex;align-items:flex-start;padding:14px 18px 10px;
   border-bottom:1px solid var(--border);flex-shrink:0;gap:10px
@@ -158,57 +177,42 @@ html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);color:var(
 #drawer-meta{font-size:11px;color:var(--muted);margin-top:4px}
 #drawer-line-badges{display:flex;gap:4px;margin-top:6px}
 #drawer-close{
-  width:28px;height:28px;border-radius:50%;
-  background:rgba(255,255,255,.06);border:none;cursor:pointer;
-  color:var(--muted);font-size:16px;display:flex;align-items:center;
-  justify-content:center;transition:background .15s;flex-shrink:0;margin-top:2px
+  width:28px;height:28px;border-radius:50%;background:rgba(255,255,255,.06);
+  border:none;cursor:pointer;color:var(--muted);font-size:16px;
+  display:flex;align-items:center;justify-content:center;
+  transition:background .15s;flex-shrink:0;margin-top:2px
 }
 #drawer-close:hover{background:rgba(255,255,255,.12);color:var(--txt)}
-
-#dep-container{
-  overflow-y:auto;flex:1;padding:12px 18px 18px
-}
-#dep-grid{
-  display:grid;gap:8px;
-  grid-template-columns:repeat(auto-fill,minmax(170px,1fr))
-}
+#dep-container{overflow-y:auto;flex:1;padding:12px 18px 18px}
+#dep-grid{display:grid;gap:8px;grid-template-columns:repeat(auto-fill,minmax(170px,1fr))}
 .dep-card{
   background:rgba(255,255,255,.03);border:1px solid var(--border);
-  border-radius:10px;padding:11px 13px;
-  transition:border-color .2s,background .2s
+  border-radius:10px;padding:11px 13px;transition:border-color .2s,background .2s
 }
 .dep-card:hover{border-color:var(--border2);background:rgba(255,255,255,.05)}
 .dep-header{display:flex;align-items:center;gap:8px;margin-bottom:5px}
 .dep-badge{
-  width:24px;height:24px;border-radius:50%;font-size:11px;font-weight:700;
+  width:24px;height:24px;font-size:11px;font-weight:700;
   display:flex;align-items:center;justify-content:center;color:#fff;flex-shrink:0
 }
-.dep-time-wrap{}
+.dep-badge.metro{border-radius:50%}
+.dep-badge.tram{border-radius:4px}
 .dep-time{font-size:18px;font-weight:700;line-height:1;font-family:'Bebas Neue',sans-serif;letter-spacing:.5px}
 .dep-delay{font-size:10px;color:var(--warn);font-weight:600}
 .dep-dest{font-size:12px;color:var(--muted);font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .dep-rt{font-size:9px;color:var(--ok);font-weight:600;margin-top:3px;display:flex;align-items:center;gap:3px}
 .dep-rt::before{content:'';width:5px;height:5px;border-radius:50%;background:var(--ok)}
+.dep-empty{grid-column:1/-1;padding:28px;text-align:center;font-size:13px;color:var(--muted);font-weight:500}
+.dep-loading{grid-column:1/-1;padding:24px;text-align:center;color:var(--muted);font-size:13px}
 
-.dep-empty{
-  grid-column:1/-1;padding:28px;text-align:center;
-  font-size:13px;color:var(--muted);font-weight:500
-}
-.dep-loading{
-  grid-column:1/-1;padding:24px;text-align:center;color:var(--muted);font-size:13px
-}
-
-/* ─────────────────────────── LOADING SCREEN ─────────────────────────── */
+/* LOADING SCREEN */
 #loading-screen{
   position:fixed;inset:0;z-index:9999;background:var(--bg);
   display:flex;flex-direction:column;align-items:center;justify-content:center;
   gap:20px;transition:opacity .5s ease
 }
 #loading-screen.out{opacity:0;pointer-events:none}
-.ls-logo{
-  font-family:'Bebas Neue',sans-serif;font-size:48px;letter-spacing:2px;
-  color:var(--txt);line-height:1
-}
+.ls-logo{font-family:'Bebas Neue',sans-serif;font-size:48px;letter-spacing:2px;color:var(--txt);line-height:1}
 .ls-logo span{color:var(--accent)}
 .ls-subtitle{font-size:13px;color:var(--muted);font-weight:500}
 .ls-bar{width:200px;height:2px;background:rgba(255,255,255,.08);border-radius:1px;overflow:hidden}
@@ -216,46 +220,28 @@ html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);color:var(
 @keyframes loadbar{0%{width:0;margin-left:0}60%{width:50%;margin-left:25%}100%{width:0;margin-left:100%}}
 #ls-msg{font-size:11px;color:var(--muted);letter-spacing:.5px;min-height:16px}
 
-/* ─────────────────────────── HOVER POPUP ─────────────────────────── */
-.leaflet-popup-content-wrapper{
-  background:var(--panel) !important;border:1px solid var(--border2) !important;
-  border-radius:10px !important;padding:0 !important;
-  box-shadow:0 12px 40px rgba(0,0,0,.6) !important;
-  backdrop-filter:blur(20px)
-}
+/* POPUP */
+.leaflet-popup-content-wrapper{background:var(--panel) !important;border:1px solid var(--border2) !important;border-radius:10px !important;padding:0 !important;box-shadow:0 12px 40px rgba(0,0,0,.6) !important;backdrop-filter:blur(20px)}
 .leaflet-popup-content{margin:0 !important}
 .leaflet-popup-tip-container{display:none !important}
 .leaflet-popup-close-button{color:var(--muted) !important;font-size:16px !important;top:6px !important;right:8px !important}
 .leaflet-popup-close-button:hover{color:var(--txt) !important;background:transparent !important}
-
 .hp{padding:12px 16px 12px;min-width:180px;max-width:240px}
 .hp-name{font-size:14px;font-weight:700;margin-bottom:8px;padding-right:18px;line-height:1.2}
-.hp-dep{
-  display:flex;align-items:center;gap:8px;
-  padding:5px 0;border-top:1px solid var(--border);
-}
+.hp-dep{display:flex;align-items:center;gap:8px;padding:5px 0;border-top:1px solid var(--border)}
 .hp-time{font-family:'Bebas Neue',sans-serif;font-size:16px;color:var(--accent);min-width:48px;letter-spacing:.5px}
 .hp-dest{font-size:11px;color:var(--muted);font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:110px}
 .hp-loading{font-size:11px;color:var(--muted);padding:6px 0;border-top:1px solid var(--border)}
 
-/* ─────────────────────────── STATION / TRAIN MARKERS ─────────────────────────── */
-.s-marker{
-  border-radius:50%;cursor:pointer;
-  border:2px solid rgba(255,255,255,.2);
-  box-shadow:0 0 0 0 rgba(255,255,255,.1);
-  transition:transform .12s,box-shadow .2s
-}
+/* MARKERS */
+.s-marker{border-radius:50%;cursor:pointer;border:2px solid rgba(255,255,255,.2);transition:transform .12s,box-shadow .2s}
+.s-marker.tram{border-radius:3px}
 .s-marker:hover{transform:scale(1.7) !important;box-shadow:0 0 0 4px rgba(255,255,255,.08)}
 .s-hub{border-width:2.5px;border-color:rgba(255,255,255,.35)}
+.t-marker{border-radius:5px;display:flex;align-items:center;justify-content:center;font-family:'Bebas Neue',sans-serif;font-size:13px;color:#fff;box-shadow:0 2px 12px rgba(0,0,0,.6);border:2px solid rgba(255,255,255,.25)}
+.t-marker.tram{border-radius:3px;font-size:11px}
 
-.t-marker{
-  border-radius:5px;display:flex;align-items:center;justify-content:center;
-  font-family:'Bebas Neue',sans-serif;font-size:13px;color:#fff;
-  box-shadow:0 2px 12px rgba(0,0,0,.6);
-  border:2px solid rgba(255,255,255,.25);
-}
-
-/* ─────────────────────────── ERROR TOAST ─────────────────────────── */
+/* TOAST */
 #toast{
   position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(80px);
   z-index:9000;background:var(--panel);border:1px solid var(--border2);
@@ -265,16 +251,12 @@ html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);color:var(
 }
 #toast.show{transform:translateX(-50%) translateY(0)}
 
-/* ─────────────────────────── SCROLLBAR ─────────────────────────── */
 ::-webkit-scrollbar{width:4px}
 ::-webkit-scrollbar-track{background:transparent}
 ::-webkit-scrollbar-thumb{background:rgba(255,255,255,.1);border-radius:2px}
-::-webkit-scrollbar-thumb:hover{background:rgba(255,255,255,.2)}
 
-/* ─────────────────────────── MOBILE ─────────────────────────── */
 @media(max-width:600px){
-  #lines-panel{display:none}
-  #stats-panel{display:none}
+  #side-panel{display:none}
   #search-box{max-width:none}
   #drawer{max-height:70vh}
   #dep-grid{grid-template-columns:1fr 1fr}
@@ -283,28 +265,23 @@ html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);color:var(
 </head>
 <body>
 
-<!-- Loading screen -->
 <div id="loading-screen">
-  <div class="ls-logo">Oslo <span>T-bane</span></div>
-  <div class="ls-subtitle">Real-time metro tracker</div>
+  <div class="ls-logo">Oslo <span>Transit</span></div>
+  <div class="ls-subtitle">Live metro & tram tracker</div>
   <div class="ls-bar"><div class="ls-bar-inner"></div></div>
   <div id="ls-msg">Starting up…</div>
 </div>
 
-<!-- Map -->
 <div id="map"></div>
 
-<!-- Top bar -->
 <div id="topbar">
-  <div id="logo-text">Oslo <span>T-bane</span></div>
+  <div id="logo-text">Oslo <span>Transit</span></div>
   <div class="live-pill"><div class="pulse"></div>LIVE</div>
-
   <div id="search-box">
     <div class="search-icon">🔍</div>
     <input id="search-input" type="text" placeholder="Search station…" autocomplete="off" spellcheck="false">
     <div id="search-results"></div>
   </div>
-
   <div id="topbar-right">
     <div class="countdown">
       <div class="cd-track"><div class="cd-fill" id="cd-fill"></div></div>
@@ -313,25 +290,27 @@ html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);color:var(
   </div>
 </div>
 
-<!-- Line filters -->
-<div id="lines-panel">
-  <div class="line-filter" data-line="1"><div class="lf-num" style="background:var(--l1)">1</div><span class="lf-label">Frognerseteren</span></div>
-  <div class="line-filter" data-line="2"><div class="lf-num" style="background:var(--l2)">2</div><span class="lf-label">Ellingsrudåsen</span></div>
-  <div class="line-filter" data-line="3"><div class="lf-num" style="background:var(--l3)">3</div><span class="lf-label">Mortensrud</span></div>
-  <div class="line-filter" data-line="4"><div class="lf-num" style="background:var(--l4)">4</div><span class="lf-label">Bergkrystallen</span></div>
-  <div class="line-filter" data-line="5"><div class="lf-num" style="background:var(--l5)">5</div><span class="lf-label">Sognsvann / Vestli</span></div>
+<div id="side-panel">
+  <!-- Mode switcher -->
+  <div id="mode-switcher">
+    <button class="mode-btn active" data-mode="metro"><span class="mode-icon">🚇</span>Metro</button>
+    <button class="mode-btn" data-mode="tram"><span class="mode-icon">🚊</span>Tram</button>
+    <button class="mode-btn" data-mode="all"><span class="mode-icon">⊕</span>All</button>
+  </div>
+
+  <!-- Line filters (populated by JS) -->
+  <div id="lines-container"></div>
+
+  <!-- Stats -->
+  <div id="stats-panel">
+    <div class="sp-title">Live Status</div>
+    <div class="sp-row"><span class="sp-label">Stops shown</span><span class="sp-val" id="stat-stations">—</span></div>
+    <div class="sp-row"><span class="sp-label">Vehicles live</span><span class="sp-val" id="stat-trains">—</span></div>
+    <div class="sp-row"><span class="sp-label">API</span><span class="sp-val ok" id="stat-api">OK</span></div>
+    <div class="sp-row"><span class="sp-label">Updated</span><span class="sp-val" id="stat-time">—</span></div>
+  </div>
 </div>
 
-<!-- Stats -->
-<div id="stats-panel">
-  <div class="sp-title">Live Status</div>
-  <div class="sp-row"><span class="sp-label">Stations</span><span class="sp-val" id="stat-stations">—</span></div>
-  <div class="sp-row"><span class="sp-label">Trains live</span><span class="sp-val" id="stat-trains">—</span></div>
-  <div class="sp-row"><span class="sp-label">API</span><span class="sp-val ok" id="stat-api">OK</span></div>
-  <div class="sp-row"><span class="sp-label">Updated</span><span class="sp-val" id="stat-time">—</span></div>
-</div>
-
-<!-- Station drawer -->
 <div id="drawer">
   <div id="drawer-header">
     <div id="drawer-info">
@@ -342,166 +321,67 @@ html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);color:var(
     <button id="drawer-close">✕</button>
   </div>
   <div id="dep-container">
-    <div id="dep-grid"><div class="dep-empty">Select a station to view live departures</div></div>
+    <div id="dep-grid"><div class="dep-empty">Select a stop to view live departures</div></div>
   </div>
 </div>
 
-<!-- Toast -->
 <div id="toast"></div>
 
 <script>
 'use strict';
-// ═══════════════════════════════════════
+// ════════════════════════════════════════
 //  CONFIG
-// ═══════════════════════════════════════
-const ET_CLIENT = 'hobbyproject-oslo-metro-live-v2';
+// ════════════════════════════════════════
+const ET_CLIENT = 'hobbyproject-oslo-transit-live';
 const JP_API    = 'https://api.entur.io/journey-planner/v3/graphql';
 const VEH_API   = 'https://api.entur.io/realtime/v2/vehicles/graphql';
 
-const LINE_COLORS = {
-  '1': '#f43f5e',
-  '2': '#fb923c',
-  '3': '#4ade80',
-  '4': '#38bdf8',
-  '5': '#c084fc',
+const METRO_LINE_IDS = ['RUT:Line:1','RUT:Line:2','RUT:Line:3','RUT:Line:4','RUT:Line:5'];
+const TRAM_LINE_IDS  = ['RUT:Line:12','RUT:Line:13','RUT:Line:15','RUT:Line:17','RUT:Line:18','RUT:Line:19'];
+
+const LINE_META = {
+  // Metro
+  '1':  { color:'#f43f5e', label:'Frognerseteren',  mode:'metro' },
+  '2':  { color:'#fb923c', label:'Ellingsrudåsen',   mode:'metro' },
+  '3':  { color:'#4ade80', label:'Mortensrud',        mode:'metro' },
+  '4':  { color:'#38bdf8', label:'Bergkrystallen',   mode:'metro' },
+  '5':  { color:'#c084fc', label:'Sognsvann/Vestli', mode:'metro' },
+  // Tram
+  '12': { color:'#facc15', label:'Majorstuen–Kjelsås',       mode:'tram' },
+  '13': { color:'#f97316', label:'Bekkestua–Ljabru',         mode:'tram' },
+  '15': { color:'#e879f9', label:'Majorstuen–Kjelsås',       mode:'tram' },
+  '17': { color:'#22d3ee', label:'Rikshospitalet–Grefsen',   mode:'tram' },
+  '18': { color:'#a3e635', label:'Rikshospitalet–Grefsen',   mode:'tram' },
+  '19': { color:'#f87171', label:'Majorstuen–Ljabru',        mode:'tram' },
 };
 
-// ═══════════════════════════════════════
-//  STATION DATA
-//  NSR IDs and coordinates verified from
-//  Entur's open stop registry
-// ═══════════════════════════════════════
-const STATIONS = [
-  // ── LINE 1 WEST ──
-  {id:'NSR:StopPlace:6364', name:'Frognerseteren',    lat:59.9774, lng:10.6779, lines:['1']},
-  {id:'NSR:StopPlace:6363', name:'Voksenkollen',       lat:59.9726, lng:10.6730, lines:['1']},
-  {id:'NSR:StopPlace:6362', name:'Holmenkollen',       lat:59.9652, lng:10.6600, lines:['1']},
-  {id:'NSR:StopPlace:6361', name:'Besserud',           lat:59.9600, lng:10.6569, lines:['1']},
-  {id:'NSR:StopPlace:6360', name:'Midtstuen',          lat:59.9567, lng:10.6548, lines:['1']},
-  {id:'NSR:StopPlace:6359', name:'Skådalen',           lat:59.9540, lng:10.6525, lines:['1']},
-  {id:'NSR:StopPlace:6358', name:'Vettakollen',        lat:59.9520, lng:10.6508, lines:['1']},
-  {id:'NSR:StopPlace:6357', name:'Iverstjern',         lat:59.9495, lng:10.6490, lines:['1']},
-  {id:'NSR:StopPlace:6356', name:'Røa',                lat:59.9455, lng:10.6446, lines:['1','2']},
-  // ── LINE 2 WEST ──
-  {id:'NSR:StopPlace:6372', name:'Østerås',            lat:59.9197, lng:10.5838, lines:['2']},
-  {id:'NSR:StopPlace:6371', name:'Eiksmarka',          lat:59.9237, lng:10.5940, lines:['2']},
-  {id:'NSR:StopPlace:6370', name:'Gjønnes',            lat:59.9274, lng:10.6060, lines:['2']},
-  {id:'NSR:StopPlace:6369', name:'Bekkestua',          lat:59.9313, lng:10.6220, lines:['2']},
-  {id:'NSR:StopPlace:6368', name:'Jar',                lat:59.9352, lng:10.6330, lines:['2']},
-  {id:'NSR:StopPlace:6367', name:'Haslum',             lat:59.9395, lng:10.6375, lines:['2']},
-  // ── SHARED WEST ──
-  {id:'NSR:StopPlace:6355', name:'Lilleaker',          lat:59.9248, lng:10.6430, lines:['1','2']},
-  {id:'NSR:StopPlace:6354', name:'Montebello',         lat:59.9214, lng:10.6462, lines:['1','2']},
-  {id:'NSR:StopPlace:6353', name:'Vækerø',             lat:59.9178, lng:10.6490, lines:['1','2']},
-  {id:'NSR:StopPlace:6350', name:'Skøyen',             lat:59.9213, lng:10.6864, lines:['1','2']},
-  {id:'NSR:StopPlace:6348', name:'Nationaltheatret',   lat:59.9137, lng:10.7327, lines:['1','2']},
-  // ── CENTRAL HUB ──
-  {id:'NSR:StopPlace:6346', name:'Stortinget',         lat:59.9131, lng:10.7372, lines:['1','2','3','4','5']},
-  {id:'NSR:StopPlace:59872',name:'Oslo S',             lat:59.9108, lng:10.7525, lines:['1','2','3','4','5']},
-  {id:'NSR:StopPlace:6343', name:'Grønland',           lat:59.9103, lng:10.7638, lines:['1','2','3','4','5']},
-  {id:'NSR:StopPlace:6342', name:'Tøyen',              lat:59.9130, lng:10.7743, lines:['1','2','3','4','5']},
-  {id:'NSR:StopPlace:6336', name:'Majorstuen',         lat:59.9289, lng:10.7150, lines:['1','2','3','4','5']},
-  // ── EAST LINE 1/2/3 ──
-  {id:'NSR:StopPlace:6341', name:'Ensjø',              lat:59.9136, lng:10.7862, lines:['1','2','3']},
-  {id:'NSR:StopPlace:6340', name:'Helsfyr',            lat:59.9120, lng:10.7942, lines:['1','2','3']},
-  {id:'NSR:StopPlace:6339', name:'Brynseng',           lat:59.9085, lng:10.7995, lines:['1','2','3']},
-  {id:'NSR:StopPlace:6338', name:'Høyenhall',          lat:59.9048, lng:10.8063, lines:['1','3']},
-  {id:'NSR:StopPlace:6337', name:'Manglerud',          lat:59.8988, lng:10.8108, lines:['1']},
-  {id:'NSR:StopPlace:6335', name:'Ryen',               lat:59.8953, lng:10.8151, lines:['1','3']},
-  {id:'NSR:StopPlace:6334', name:'Abildsø',            lat:59.8907, lng:10.8179, lines:['1']},
-  {id:'NSR:StopPlace:6333', name:'Foten',              lat:59.8871, lng:10.8195, lines:['1']},
-  {id:'NSR:StopPlace:6332', name:'Mortensrud',         lat:59.8840, lng:10.8211, lines:['1','3']},
-  // ── LINE 2 EAST ──
-  {id:'NSR:StopPlace:6314', name:'Østerlia',           lat:59.9280, lng:10.8222, lines:['2']},
-  {id:'NSR:StopPlace:6310', name:'Tveita',             lat:59.9313, lng:10.8293, lines:['2']},
-  {id:'NSR:StopPlace:6311', name:'Haugerud',           lat:59.9370, lng:10.8413, lines:['2']},
-  {id:'NSR:StopPlace:6312', name:'Trosterud',          lat:59.9397, lng:10.8522, lines:['2']},
-  {id:'NSR:StopPlace:6313', name:'Ellingsrudåsen',     lat:59.9420, lng:10.8750, lines:['2']},
-  {id:'NSR:StopPlace:6315', name:'Lindeberg',          lat:59.9451, lng:10.8600, lines:['2']},
-  {id:'NSR:StopPlace:6316', name:'Furuset',            lat:59.9540, lng:10.8640, lines:['2']},
-  {id:'NSR:StopPlace:6317', name:'Kalbakken',          lat:59.9497, lng:10.8677, lines:['2']},
-  // ── LINE 3 SOUTH ──
-  {id:'NSR:StopPlace:6322', name:'Bøler',              lat:59.9070, lng:10.8250, lines:['3']},
-  {id:'NSR:StopPlace:6321', name:'Bogerud',            lat:59.9046, lng:10.8285, lines:['3']},
-  {id:'NSR:StopPlace:6320', name:'Oppsal',             lat:59.9156, lng:10.8179, lines:['3']},
-  {id:'NSR:StopPlace:6319', name:'Godlia',             lat:59.9170, lng:10.8231, lines:['3']},
-  {id:'NSR:StopPlace:6318', name:'Skullerud',          lat:59.9200, lng:10.8282, lines:['3']},
-  {id:'NSR:StopPlace:6323', name:'Lambertseter',       lat:59.8985, lng:10.8244, lines:['3']},
-  {id:'NSR:StopPlace:6324', name:'Lienveien',          lat:59.8954, lng:10.8230, lines:['3']},
-  {id:'NSR:StopPlace:6325', name:'Hauketo',            lat:59.8830, lng:10.8206, lines:['3']},
-  {id:'NSR:StopPlace:6328', name:'Ljabru',             lat:59.8694, lng:10.8152, lines:['3']},
-  {id:'NSR:StopPlace:6326', name:'Holtet',             lat:59.8629, lng:10.8168, lines:['3']},
-  {id:'NSR:StopPlace:6329', name:'Brattlikollen',      lat:59.8622, lng:10.8164, lines:['3']},
-  {id:'NSR:StopPlace:6327', name:'Ljan',               lat:59.8539, lng:10.8150, lines:['3']},
-  {id:'NSR:StopPlace:6330', name:'Prinsdal',           lat:59.8436, lng:10.8182, lines:['3']},
-  {id:'NSR:StopPlace:6331', name:'Sørmarka',           lat:59.8380, lng:10.8214, lines:['3']},
-  // ── LINES 4/5 NORTH (via Ullevål) ──
-  {id:'NSR:StopPlace:6390', name:'Frøen',              lat:59.9273, lng:10.7131, lines:['4','5']},
-  {id:'NSR:StopPlace:6391', name:'Steinerud',          lat:59.9290, lng:10.7076, lines:['4','5']},
-  {id:'NSR:StopPlace:6392', name:'Vinderen',           lat:59.9342, lng:10.6989, lines:['4','5']},
-  {id:'NSR:StopPlace:6393', name:'Slemdal',            lat:59.9395, lng:10.6880, lines:['4','5']},
-  {id:'NSR:StopPlace:6394', name:'Borgen',             lat:59.9387, lng:10.6724, lines:['4','5']},
-  {id:'NSR:StopPlace:6380', name:'Blindern',           lat:59.9407, lng:10.7202, lines:['4','5']},
-  {id:'NSR:StopPlace:6381', name:'Forskningsparken',   lat:59.9451, lng:10.7159, lines:['4','5']},
-  {id:'NSR:StopPlace:6382', name:'Ullevål stadion',    lat:59.9453, lng:10.7269, lines:['4','5']},
-  {id:'NSR:StopPlace:6383', name:'Nydalen',            lat:59.9495, lng:10.7647, lines:['4','5']},
-  {id:'NSR:StopPlace:6384', name:'Storo',              lat:59.9459, lng:10.7716, lines:['4','5']},
-  {id:'NSR:StopPlace:6386', name:'Sandaker',           lat:59.9391, lng:10.7637, lines:['4','5']},
-  {id:'NSR:StopPlace:6387', name:'Torshov',            lat:59.9334, lng:10.7719, lines:['4','5']},
-  {id:'NSR:StopPlace:6385', name:'Sinsen',             lat:59.9353, lng:10.7887, lines:['4','5']},
-  {id:'NSR:StopPlace:6388', name:'Carl Berner',        lat:59.9207, lng:10.7811, lines:['4','5']},
-  {id:'NSR:StopPlace:6389', name:'Løren',              lat:59.9252, lng:10.7875, lines:['4','5']},
-  {id:'NSR:StopPlace:6409', name:'Disen',              lat:59.9424, lng:10.8053, lines:['4','5']},
-  {id:'NSR:StopPlace:6410', name:'Vollebekk',          lat:59.9295, lng:10.7932, lines:['4']},
-  {id:'NSR:StopPlace:6411', name:'Bergkrystallen',     lat:59.9135, lng:10.8110, lines:['4']},
-  // ── LINE 5 SOGNSVANN ──
-  {id:'NSR:StopPlace:6397', name:'Rikshospitalet',     lat:59.9519, lng:10.7276, lines:['5']},
-  {id:'NSR:StopPlace:6396', name:'Gaustad',            lat:59.9562, lng:10.7305, lines:['5']},
-  {id:'NSR:StopPlace:6395', name:'Kringsjå',           lat:59.9607, lng:10.7297, lines:['5']},
-  {id:'NSR:StopPlace:6398', name:'Sognsvann',          lat:59.9676, lng:10.7254, lines:['5']},
-  // ── LINE 5 EAST ──
-  {id:'NSR:StopPlace:6405', name:'Romsås',             lat:59.9664, lng:10.8401, lines:['5']},
-  {id:'NSR:StopPlace:6404', name:'Stovner',            lat:59.9634, lng:10.8296, lines:['5']},
-  {id:'NSR:StopPlace:6403', name:'Vestli',             lat:59.9643, lng:10.8217, lines:['5']},
-  {id:'NSR:StopPlace:6420', name:'Haugenstua',         lat:59.9573, lng:10.8741, lines:['5']},
-  {id:'NSR:StopPlace:6421', name:'Høybråten',          lat:59.9611, lng:10.8751, lines:['5']},
-  {id:'NSR:StopPlace:6422', name:'Bredtvet',           lat:59.9529, lng:10.8718, lines:['5']},
-  {id:'NSR:StopPlace:6419', name:'Grorud',             lat:59.9579, lng:10.8598, lines:['5']},
-  {id:'NSR:StopPlace:6418', name:'Ammerud',            lat:59.9562, lng:10.8484, lines:['5']},
-  {id:'NSR:StopPlace:6417', name:'Rommen',             lat:59.9534, lng:10.8451, lines:['5']},
-  {id:'NSR:StopPlace:6416', name:'Edvard Munchs vei',  lat:59.9620, lng:10.8150, lines:['5']},
-  {id:'NSR:StopPlace:6415', name:'Tonsenhagen',        lat:59.9520, lng:10.8556, lines:['5']},
-];
+function lineColor(code) { return LINE_META[code]?.color || '#888'; }
+function lineMode(code)  { return LINE_META[code]?.mode  || 'metro'; }
 
-// ═══════════════════════════════════════
-//  APP STATE
-// ═══════════════════════════════════════
+// ════════════════════════════════════════
+//  STATE
+// ════════════════════════════════════════
 const state = {
-  map: null,
-  activeLines: new Set(['1','2','3','4','5']),
-  stationMarkers: {},   // id → leaflet marker
-  trainMarkers:   {},   // vehicleRef → leaflet marker
-  activeStation: null,
-  countdown: 15,
-  cdTimer: null,
-  apiOk: true,
+  map:            null,
+  currentMode:    'metro',   // 'metro' | 'tram' | 'all'
+  activeLines:    new Set(Object.keys(LINE_META)),
+  stops:          [],        // all discovered stops
+  stopMarkers:    {},        // id → marker
+  vehicleMarkers: {},        // vehicleRef → marker
+  activeStop:     null,
+  countdown:      15,
+  cdTimer:        null,
 };
 
-// ═══════════════════════════════════════
+// ════════════════════════════════════════
 //  UTILS
-// ═══════════════════════════════════════
-const lc = l => LINE_COLORS[l] || '#888';
-
-function setLoadMsg(m) {
-  document.getElementById('ls-msg').textContent = m;
-}
-
+// ════════════════════════════════════════
+function setLoadMsg(m) { document.getElementById('ls-msg').textContent = m; }
 function hideLoading() {
   const el = document.getElementById('loading-screen');
   el.classList.add('out');
   setTimeout(() => el.remove(), 600);
 }
-
 let toastTimer;
 function showToast(msg) {
   const el = document.getElementById('toast');
@@ -510,92 +390,169 @@ function showToast(msg) {
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => el.classList.remove('show'), 3500);
 }
-
 function nowTime() {
   return new Date().toLocaleTimeString('no-NO', {hour:'2-digit', minute:'2-digit'});
 }
-
 function formatDepTime(isoStr) {
   const dt = new Date(isoStr);
-  const diffMs = dt - Date.now();
-  const diffMin = Math.round(diffMs / 60000);
+  const diffMin = Math.round((dt - Date.now()) / 60000);
   if (diffMin <= 0) return 'Nå';
   if (diffMin < 60) return diffMin + ' min';
   return dt.toLocaleTimeString('no-NO', {hour:'2-digit', minute:'2-digit'});
 }
+function stopVisible(stop) {
+  const mode = state.currentMode;
+  const hasVisibleLine = stop.lines.some(l => state.activeLines.has(l));
+  if (!hasVisibleLine) return false;
+  if (mode === 'all') return true;
+  return stop.lines.some(l => lineMode(l) === mode);
+}
 
-// ═══════════════════════════════════════
-//  MAP INIT
-// ═══════════════════════════════════════
+// ════════════════════════════════════════
+//  MAP
+// ════════════════════════════════════════
 function initMap() {
   state.map = L.map('map', {
-    center: [59.9139, 10.7522],
-    zoom: 13,
-    zoomControl: false,
-    attributionControl: false,
+    center: [59.9139, 10.7522], zoom: 13,
+    zoomControl: false, attributionControl: false,
   });
-
   L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
     subdomains: 'abcd', maxZoom: 19
   }).addTo(state.map);
-
   L.control.zoom({ position: 'bottomright' }).addTo(state.map);
-  L.control.attribution({ position: 'bottomleft', prefix: '© <a href="https://carto.com">CARTO</a> © <a href="https://openstreetmap.org">OpenStreetMap</a>' }).addTo(state.map);
+  L.control.attribution({ position: 'bottomleft',
+    prefix: '© <a href="https://carto.com">CARTO</a> © <a href="https://openstreetmap.org">OpenStreetMap</a>'
+  }).addTo(state.map);
 }
 
-// ═══════════════════════════════════════
-//  STATION MARKERS
-// ═══════════════════════════════════════
-function renderStationMarkers() {
-  // remove old
-  Object.values(state.stationMarkers).forEach(m => m.remove());
-  state.stationMarkers = {};
+// ════════════════════════════════════════
+//  DISCOVER STOPS FROM ENTUR
+// ════════════════════════════════════════
+async function discoverStops(lineIds, modeHint) {
+  const fields = lineIds.map((id, i) => {
+    return `l${i}: line(id: "${id}") { publicCode quays { id name latitude longitude stopPlace { id } } }`;
+  }).join(' ');
 
-  let count = 0;
-  STATIONS.forEach(station => {
-    if (!station.lines.some(l => state.activeLines.has(l))) return;
-
-    const primaryLine = station.lines.find(l => state.activeLines.has(l));
-    const color = lc(primaryLine);
-    const isHub = station.lines.length >= 3;
-    const sz = isHub ? 14 : 9;
-
-    const icon = L.divIcon({
-      className: '',
-      html: `<div class="s-marker${isHub?' s-hub':''}" style="width:${sz}px;height:${sz}px;background:${color}"></div>`,
-      iconSize: [sz, sz],
-      iconAnchor: [sz/2, sz/2],
+  try {
+    const res = await fetch(JP_API, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'ET-Client-Name': ET_CLIENT },
+      body: JSON.stringify({ query: `{ ${fields} }` }),
     });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const json = await res.json();
+    if (json.errors) console.warn(`[${modeHint}] errors:`, json.errors[0]?.message);
 
-    const marker = L.marker([station.lat, station.lng], {
-      icon,
-      zIndexOffset: isHub ? 300 : 0,
-    }).addTo(state.map);
-
-    // Click → open drawer
-    marker.on('click', () => openDrawer(station));
-
-    // Hover → mini popup with 3 departures
-    let hoverPop = null;
-    marker.on('mouseover', () => {
-      hoverPop = L.popup({ closeButton: true, offset: [0, -4], autoPan: false, maxWidth: 250 })
-        .setLatLng([station.lat, station.lng])
-        .setContent(buildHoverPopup(station.name, null))
-        .openOn(state.map);
-
-      fetchDepartures(station.id, 3).then(deps => {
-        if (!hoverPop) return;
-        hoverPop.setContent(buildHoverPopup(station.name, deps));
+    const stopMap = {};
+    Object.values(json?.data || {}).forEach(line => {
+      if (!line) return;
+      const code = line.publicCode;
+      (line.quays || []).forEach(q => {
+        if (!q.latitude || !q.longitude) return;
+        const spId = q.stopPlace?.id || q.id;
+        if (!stopMap[spId]) {
+          stopMap[spId] = { id: spId, name: q.name, lat: parseFloat(q.latitude), lng: parseFloat(q.longitude), lines: [] };
+        }
+        if (!stopMap[spId].lines.includes(code)) stopMap[spId].lines.push(code);
       });
     });
 
-    marker.on('mouseout', () => {
-      setTimeout(() => {
-        if (hoverPop) { state.map.closePopup(hoverPop); hoverPop = null; }
-      }, 200);
+    const stops = Object.values(stopMap);
+    stops.forEach(s => s.lines.sort());
+    console.log(`[${modeHint}] Discovered ${stops.length} stops`);
+    return stops;
+  } catch(e) {
+    console.warn(`[${modeHint}] Discovery failed:`, e.message);
+    return [];
+  }
+}
+
+// ════════════════════════════════════════
+//  RENDER LINE FILTER PANEL
+// ════════════════════════════════════════
+function renderFilters() {
+  const container = document.getElementById('lines-container');
+
+  const metroLines = ['1','2','3','4','5'];
+  const tramLines  = ['12','13','15','17','18','19'];
+
+  const visible = state.currentMode;
+
+  const makeSection = (lines, sectionMode) => {
+    if (visible !== 'all' && visible !== sectionMode) return '';
+    return `
+      <div class="filter-section">
+        <div class="filter-section-label">${sectionMode === 'metro' ? '🚇 Metro' : '🚊 Tram'}</div>
+        ${lines.map(code => {
+          const meta = LINE_META[code] || {};
+          const off = !state.activeLines.has(code) ? 'off' : '';
+          return `<div class="line-filter ${off}" data-line="${code}">
+            <div class="lf-num ${sectionMode}" style="background:${meta.color}">${code}</div>
+            <span class="lf-label">${meta.label || ''}</span>
+          </div>`;
+        }).join('')}
+      </div>`;
+  };
+
+  container.innerHTML = makeSection(metroLines, 'metro') + makeSection(tramLines, 'tram');
+
+  // Re-attach click events
+  container.querySelectorAll('.line-filter').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const l = btn.dataset.line;
+      if (state.activeLines.has(l)) state.activeLines.delete(l);
+      else state.activeLines.add(l);
+      btn.classList.toggle('off');
+      renderStopMarkers();
+      refreshVehicles();
+    });
+  });
+}
+
+// ════════════════════════════════════════
+//  STOP MARKERS
+// ════════════════════════════════════════
+function renderStopMarkers() {
+  Object.values(state.stopMarkers).forEach(m => m.remove());
+  state.stopMarkers = {};
+
+  let count = 0;
+  state.stops.forEach(stop => {
+    if (!stopVisible(stop)) return;
+
+    const primaryLine = stop.lines.find(l => state.activeLines.has(l) &&
+      (state.currentMode === 'all' || lineMode(l) === state.currentMode));
+    if (!primaryLine) return;
+
+    const color  = lineColor(primaryLine);
+    const mode   = lineMode(primaryLine);
+    const isHub  = stop.lines.length >= 3;
+    const sz     = isHub ? 14 : mode === 'tram' ? 8 : 9;
+
+    const icon = L.divIcon({
+      className: '',
+      html: `<div class="s-marker ${mode === 'tram' ? 'tram' : ''}${isHub ? ' s-hub' : ''}" style="width:${sz}px;height:${sz}px;background:${color}"></div>`,
+      iconSize: [sz, sz], iconAnchor: [sz/2, sz/2],
     });
 
-    state.stationMarkers[station.id] = marker;
+    const marker = L.marker([stop.lat, stop.lng], { icon, zIndexOffset: isHub ? 300 : 0 }).addTo(state.map);
+    marker.on('click', () => openDrawer(stop));
+
+    let hoverPop = null;
+    marker.on('mouseover', () => {
+      hoverPop = L.popup({ closeButton: true, offset: [0, -4], autoPan: false, maxWidth: 250 })
+        .setLatLng([stop.lat, stop.lng])
+        .setContent(buildHoverPopup(stop.name, null))
+        .openOn(state.map);
+      fetchDepartures(stop.id, 3).then(deps => {
+        if (hoverPop) hoverPop.setContent(buildHoverPopup(stop.name, deps));
+      });
+    });
+    marker.on('mouseout', () => {
+      setTimeout(() => { if (hoverPop) { state.map.closePopup(hoverPop); hoverPop = null; } }, 200);
+    });
+
+    state.stopMarkers[stop.id] = marker;
     count++;
   });
 
@@ -603,130 +560,121 @@ function renderStationMarkers() {
 }
 
 function buildHoverPopup(name, deps) {
-  if (!deps) {
-    return `<div class="hp"><div class="hp-name">${name}</div><div class="hp-loading">Loading departures…</div></div>`;
-  }
-  if (!deps.length) {
-    return `<div class="hp"><div class="hp-name">${name}</div><div class="hp-loading">No upcoming departures</div></div>`;
-  }
+  if (!deps) return `<div class="hp"><div class="hp-name">${name}</div><div class="hp-loading">Loading departures…</div></div>`;
+  if (!deps.length) return `<div class="hp"><div class="hp-name">${name}</div><div class="hp-loading">No upcoming departures</div></div>`;
   const rows = deps.map(d => `
     <div class="hp-dep">
-      <div class="lbadge" style="background:${lc(d.line)};width:16px;height:16px;font-size:9px;border-radius:50%">${d.line}</div>
+      <div class="lbadge ${lineMode(d.line) === 'tram' ? 'tram' : ''}" style="background:${lineColor(d.line)};width:16px;height:16px;font-size:9px">${d.line}</div>
       <span class="hp-time">${d.timeStr}</span>
       <span class="hp-dest">${d.dest}</span>
     </div>`).join('');
   return `<div class="hp"><div class="hp-name">${name}</div>${rows}</div>`;
 }
 
-// ═══════════════════════════════════════
-//  VEHICLE POSITIONS
-// ═══════════════════════════════════════
+// ════════════════════════════════════════
+//  VEHICLES
+// ════════════════════════════════════════
 async function fetchVehicles() {
+  // Query both metro and tram in one shot
   const query = `{
-    vehicles(codespaceId: "RUT", mode: metro) {
-      vehicleRef
-      location { latitude longitude }
-      line { publicCode }
-      monitored
+    metro: vehicles(codespaceId: "RUT", mode: metro) {
+      vehicleRef location { latitude longitude } line { publicCode } monitored
+    }
+    tram: vehicles(codespaceId: "RUT", mode: tram) {
+      vehicleRef location { latitude longitude } line { publicCode } monitored
     }
   }`;
-
   try {
     const res = await fetch(VEH_API, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'ET-Client-Name': ET_CLIENT },
       body: JSON.stringify({ query }),
     });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
     const json = await res.json();
     if (json.errors) throw new Error(json.errors[0].message);
-    return json?.data?.vehicles || [];
+    const metro = (json?.data?.metro || []).map(v => ({...v, _mode:'metro'}));
+    const tram  = (json?.data?.tram  || []).map(v => ({...v, _mode:'tram'}));
+    return [...metro, ...tram];
   } catch(e) {
     console.warn('[Vehicles]', e.message);
-    return null; // null = error, [] = empty OK
+    return null;
   }
 }
 
-function updateTrainMarkers(vehicles) {
+function updateVehicleMarkers(vehicles) {
   if (vehicles === null) {
-    // API error — don't remove existing markers, just warn
-    updateApiStatus(false, 'Vehicle API error');
+    document.getElementById('stat-api').textContent = 'Error';
+    document.getElementById('stat-api').className = 'sp-val warn';
     return;
   }
+  document.getElementById('stat-api').textContent = 'OK';
+  document.getElementById('stat-api').className = 'sp-val ok';
 
-  updateApiStatus(true);
   const seen = new Set();
-
   vehicles.forEach(v => {
     if (!v.location?.latitude || !v.location?.longitude) return;
-    const lat = v.location.latitude;
-    const lng = v.location.longitude;
-    const ref = v.vehicleRef || `${lat},${lng}`;
-    const line = v.line?.publicCode || '?';
-    const color = lc(line);
+    const lat  = v.location.latitude;
+    const lng  = v.location.longitude;
+    const code = v.line?.publicCode || '?';
+    const mode = v._mode;
+    const ref  = v.vehicleRef || `${lat},${lng}`;
     seen.add(ref);
 
-    // Filter by active lines
-    if (!state.activeLines.has(line)) {
-      if (state.trainMarkers[ref]) { state.trainMarkers[ref].remove(); delete state.trainMarkers[ref]; }
+    // Check visibility
+    const modeVisible = state.currentMode === 'all' || state.currentMode === mode;
+    const lineVisible = state.activeLines.has(code);
+    if (!modeVisible || !lineVisible) {
+      if (state.vehicleMarkers[ref]) { state.vehicleMarkers[ref].remove(); delete state.vehicleMarkers[ref]; }
       return;
     }
 
-    if (state.trainMarkers[ref]) {
-      state.trainMarkers[ref].setLatLng([lat, lng]);
+    const color = lineColor(code);
+    if (state.vehicleMarkers[ref]) {
+      state.vehicleMarkers[ref].setLatLng([lat, lng]);
     } else {
+      const isTram = mode === 'tram';
       const icon = L.divIcon({
         className: '',
-        html: `<div class="t-marker" style="width:24px;height:24px;background:${color}">${line}</div>`,
-        iconSize: [24, 24],
-        iconAnchor: [12, 12],
+        html: `<div class="t-marker ${isTram ? 'tram' : ''}" style="width:${isTram?20:24}px;height:${isTram?20:24}px;background:${color}">${code}</div>`,
+        iconSize: [isTram?20:24, isTram?20:24], iconAnchor: [isTram?10:12, isTram?10:12],
       });
       const m = L.marker([lat, lng], { icon, zIndexOffset: 600 }).addTo(state.map);
-      m.bindTooltip(`Line ${line}`, { direction: 'top', offset: [0, -14] });
+      m.bindTooltip(`Line ${code}`, { direction: 'top', offset: [0, -14] });
       m.on('click', () => {
-        // Find nearest station to this train and open it
-        const nearest = findNearestStation(lat, lng, line);
+        const nearest = findNearestStop(lat, lng, code);
         if (nearest) openDrawer(nearest);
       });
-      state.trainMarkers[ref] = m;
+      state.vehicleMarkers[ref] = m;
     }
   });
 
-  // Remove trains no longer in feed
-  for (const ref of Object.keys(state.trainMarkers)) {
-    if (!seen.has(ref)) {
-      state.trainMarkers[ref].remove();
-      delete state.trainMarkers[ref];
-    }
+  // Remove stale
+  for (const ref of Object.keys(state.vehicleMarkers)) {
+    if (!seen.has(ref)) { state.vehicleMarkers[ref].remove(); delete state.vehicleMarkers[ref]; }
   }
 
-  const trainCount = Object.keys(state.trainMarkers).length;
-  document.getElementById('stat-trains').textContent = trainCount > 0 ? trainCount : '—';
+  document.getElementById('stat-trains').textContent = Object.keys(state.vehicleMarkers).length || '—';
 }
 
-function findNearestStation(lat, lng, line) {
+function refreshVehicles() {
+  fetchVehicles().then(v => { if (v) updateVehicleMarkers(v); });
+}
+
+function findNearestStop(lat, lng, lineCode) {
   let nearest = null, minDist = Infinity;
-  STATIONS.forEach(st => {
-    if (!st.lines.includes(line)) return;
+  state.stops.forEach(st => {
+    if (!st.lines.includes(lineCode)) return;
     const d = Math.hypot(st.lat - lat, st.lng - lng);
     if (d < minDist) { minDist = d; nearest = st; }
   });
   return nearest;
 }
 
-function updateApiStatus(ok, msg) {
-  state.apiOk = ok;
-  const el = document.getElementById('stat-api');
-  el.textContent = ok ? 'OK' : 'Error';
-  el.className = 'sp-val ' + (ok ? 'ok' : 'warn');
-  if (!ok && msg) showToast('⚠ ' + msg);
-}
-
-// ═══════════════════════════════════════
+// ════════════════════════════════════════
 //  DEPARTURES
-// ═══════════════════════════════════════
+// ════════════════════════════════════════
 async function fetchDepartures(stopId, count = 8) {
-  // Plain inline query (no variables) — matches confirmed working Entur API pattern
   const query = `{
     stopPlace(id: "${stopId}") {
       estimatedCalls(numberOfDepartures: ${count}, timeRange: 7200) {
@@ -744,17 +692,12 @@ async function fetchDepartures(stopId, count = 8) {
       headers: { 'Content-Type': 'application/json', 'ET-Client-Name': ET_CLIENT },
       body: JSON.stringify({ query }),
     });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
     const json = await res.json();
-    if (json.errors) {
-      console.warn('[JP] GraphQL errors:', JSON.stringify(json.errors));
-      return [];
-    }
+    if (json.errors) { console.warn('[JP]', json.errors[0]?.message); return []; }
     const calls = json?.data?.stopPlace?.estimatedCalls ?? [];
     return calls.map(c => {
-      const aimed    = new Date(c.aimedDepartureTime);
-      const expected = new Date(c.expectedDepartureTime);
-      const delaySec = Math.max(0, Math.round((expected - aimed) / 1000));
+      const delaySec = Math.max(0, Math.round((new Date(c.expectedDepartureTime) - new Date(c.aimedDepartureTime)) / 1000));
       return {
         timeStr:  formatDepTime(c.expectedDepartureTime),
         dest:     c.destinationDisplay?.frontText || '—',
@@ -764,93 +707,98 @@ async function fetchDepartures(stopId, count = 8) {
       };
     });
   } catch(e) {
-    console.warn('[JP] fetch error:', e.message);
+    console.warn('[JP]', e.message);
     return null;
   }
 }
 
-// ═══════════════════════════════════════
+// ════════════════════════════════════════
 //  DRAWER
-// ═══════════════════════════════════════
-async function openDrawer(station) {
-  state.activeStation = station;
-
-  // Set header
-  document.getElementById('drawer-name').textContent = station.name;
+// ════════════════════════════════════════
+async function openDrawer(stop) {
+  state.activeStop = stop;
+  document.getElementById('drawer-name').textContent = stop.name;
   document.getElementById('drawer-meta').textContent = 'Fetching live departures…';
-  document.getElementById('drawer-line-badges').innerHTML = station.lines
-    .map(l => `<div class="lbadge" style="background:${lc(l)};width:20px;height:20px;font-size:10px">${l}</div>`)
-    .join('');
-
-  // Show loading state
+  document.getElementById('drawer-line-badges').innerHTML = stop.lines.map(l => {
+    const isTram = lineMode(l) === 'tram';
+    return `<div class="lbadge ${isTram?'tram':''}" style="background:${lineColor(l)};width:20px;height:20px;font-size:10px">${l}</div>`;
+  }).join('');
   document.getElementById('dep-grid').innerHTML = '<div class="dep-loading">⏳ Loading…</div>';
   document.getElementById('drawer').classList.add('open');
-
-  await loadDrawerDeps(station);
+  await loadDrawerDeps(stop);
 }
 
-async function loadDrawerDeps(station) {
-  const deps = await fetchDepartures(station.id, 8);
-
-  // Update meta line
-  document.getElementById('drawer-meta').textContent =
-    `Next departures · ${nowTime()}`;
-
+async function loadDrawerDeps(stop) {
+  const deps = await fetchDepartures(stop.id, 8);
+  document.getElementById('drawer-meta').textContent = `Next departures · ${nowTime()}`;
   if (deps === null) {
-    document.getElementById('dep-grid').innerHTML =
-      '<div class="dep-empty">⚠ Could not load departures — check console</div>';
+    document.getElementById('dep-grid').innerHTML = '<div class="dep-empty">⚠ Could not load departures</div>';
     return;
   }
   if (!deps.length) {
-    document.getElementById('dep-grid').innerHTML =
-      '<div class="dep-empty">No upcoming departures found for this station</div>';
+    document.getElementById('dep-grid').innerHTML = '<div class="dep-empty">No upcoming departures</div>';
     return;
   }
-
   document.getElementById('dep-grid').innerHTML = deps.map(d => {
-    const col = lc(d.line);
+    const col = lineColor(d.line);
+    const isTram = lineMode(d.line) === 'tram';
     const delMin = Math.round(d.delaySec / 60);
-    return `
-      <div class="dep-card">
-        <div class="dep-header">
-          <div class="dep-badge" style="background:${col}">${d.line}</div>
-          <div class="dep-time-wrap">
-            <div class="dep-time">${d.timeStr}</div>
-            ${delMin > 0 ? `<div class="dep-delay">+${delMin} min</div>` : ''}
-          </div>
+    return `<div class="dep-card">
+      <div class="dep-header">
+        <div class="dep-badge ${isTram?'tram':'metro'}" style="background:${col}">${d.line}</div>
+        <div>
+          <div class="dep-time">${d.timeStr}</div>
+          ${delMin > 0 ? `<div class="dep-delay">+${delMin} min</div>` : ''}
         </div>
-        <div class="dep-dest">${d.dest}</div>
-        ${d.realtime ? '<div class="dep-rt">realtime</div>' : ''}
-      </div>`;
+      </div>
+      <div class="dep-dest">${d.dest}</div>
+      ${d.realtime ? '<div class="dep-rt">realtime</div>' : ''}
+    </div>`;
   }).join('');
 }
 
 document.getElementById('drawer-close').addEventListener('click', () => {
   document.getElementById('drawer').classList.remove('open');
-  state.activeStation = null;
+  state.activeStop = null;
 });
 
-// ═══════════════════════════════════════
+// ════════════════════════════════════════
+//  MODE SWITCHER
+// ════════════════════════════════════════
+document.querySelectorAll('.mode-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    state.currentMode = btn.dataset.mode;
+    renderFilters();
+    renderStopMarkers();
+    refreshVehicles();
+  });
+});
+
+// ════════════════════════════════════════
 //  SEARCH
-// ═══════════════════════════════════════
-const searchInput = document.getElementById('search-input');
+// ════════════════════════════════════════
+const searchInput     = document.getElementById('search-input');
 const searchResultsEl = document.getElementById('search-results');
 
 searchInput.addEventListener('input', () => {
   const q = searchInput.value.trim().toLowerCase();
   if (q.length < 2) { searchResultsEl.classList.remove('open'); return; }
 
-  const hits = STATIONS.filter(s => s.name.toLowerCase().includes(q)).slice(0, 12);
+  const hits = state.stops.filter(s => s.name.toLowerCase().includes(q)).slice(0, 14);
   if (!hits.length) {
-    searchResultsEl.innerHTML = '<div class="sr-item"><span class="sr-name" style="color:var(--muted)">No stations found</span></div>';
+    searchResultsEl.innerHTML = '<div class="sr-item"><span class="sr-name" style="color:var(--muted)">No stops found</span></div>';
   } else {
-    searchResultsEl.innerHTML = hits.map(s => `
-      <div class="sr-item" data-id="${s.id}">
+    searchResultsEl.innerHTML = hits.map(s => {
+      const modes = [...new Set(s.lines.map(l => lineMode(l)))];
+      const modeStr = modes.includes('metro') && modes.includes('tram') ? 'Metro + Tram' : modes[0];
+      return `<div class="sr-item" data-id="${s.id}">
         <span class="sr-name">${s.name}</span>
-        <div class="sr-badges">
-          ${s.lines.map(l => `<div class="lbadge" style="background:${lc(l)}">${l}</div>`).join('')}
-        </div>
-      </div>`).join('');
+        <span class="sr-mode">${modeStr}</span>
+        <div class="sr-badges">${s.lines.slice(0,4).map(l => `<div class="lbadge ${lineMode(l)==='tram'?'tram':''}" style="background:${lineColor(l)}">${l}</div>`).join('')}</div>
+      </div>`;
+    }).join('');
   }
   searchResultsEl.classList.add('open');
 });
@@ -858,57 +806,31 @@ searchInput.addEventListener('input', () => {
 searchResultsEl.addEventListener('click', e => {
   const item = e.target.closest('.sr-item[data-id]');
   if (!item) return;
-  const st = STATIONS.find(s => s.id === item.dataset.id);
-  if (!st) return;
-
+  const stop = state.stops.find(s => s.id === item.dataset.id);
+  if (!stop) return;
   searchResultsEl.classList.remove('open');
-  searchInput.value = st.name;
-
-  // Fly to station, then open drawer
-  state.map.flyTo([st.lat, st.lng], 16, { duration: 1, easeLinearity: 0.5 });
-  setTimeout(() => openDrawer(st), 1000);
+  searchInput.value = stop.name;
+  state.map.flyTo([stop.lat, stop.lng], 16, { duration: 1, easeLinearity: 0.5 });
+  setTimeout(() => openDrawer(stop), 1000);
 });
 
 document.addEventListener('click', e => {
   if (!e.target.closest('#search-box')) searchResultsEl.classList.remove('open');
 });
-
 searchInput.addEventListener('keydown', e => {
   if (e.key === 'Escape') { searchResultsEl.classList.remove('open'); searchInput.blur(); }
 });
 
-// ═══════════════════════════════════════
-//  LINE FILTERS
-// ═══════════════════════════════════════
-document.querySelectorAll('.line-filter').forEach(btn => {
-  btn.addEventListener('click', () => {
-    const l = btn.dataset.line;
-    if (state.activeLines.has(l)) {
-      state.activeLines.delete(l);
-      btn.classList.add('hidden');
-    } else {
-      state.activeLines.add(l);
-      btn.classList.remove('hidden');
-    }
-    renderStationMarkers();
-    // Refresh train visibility
-    fetchVehicles().then(v => { if (v) updateTrainMarkers(v); });
-  });
-});
-
-// ═══════════════════════════════════════
+// ════════════════════════════════════════
 //  COUNTDOWN + REFRESH
-// ═══════════════════════════════════════
+// ════════════════════════════════════════
 function startCountdown() {
   state.countdown = 15;
   if (state.cdTimer) clearInterval(state.cdTimer);
-
   state.cdTimer = setInterval(async () => {
     state.countdown--;
-    const pct = Math.max(0, (state.countdown / 15) * 100);
-    document.getElementById('cd-fill').style.width = pct + '%';
+    document.getElementById('cd-fill').style.width = Math.max(0, (state.countdown / 15) * 100) + '%';
     document.getElementById('cd-txt').textContent = state.countdown + 's';
-
     if (state.countdown <= 0) {
       clearInterval(state.cdTimer);
       await tick();
@@ -920,103 +842,51 @@ function startCountdown() {
 async function tick() {
   document.getElementById('stat-time').textContent = nowTime();
   const vehicles = await fetchVehicles();
-  if (vehicles !== null) updateTrainMarkers(vehicles);
-  if (state.activeStation) await loadDrawerDeps(state.activeStation);
+  if (vehicles !== null) updateVehicleMarkers(vehicles);
+  if (state.activeStop) await loadDrawerDeps(state.activeStop);
 }
 
-// ═══════════════════════════════════════
-//  DISCOVER ALL METRO STOPS FROM ENTUR
-// ═══════════════════════════════════════
-// Queries the lines API to get definitive stop list with
-// correct IDs, coordinates, and line assignments from Entur.
-async function discoverMetroStations() {
-  const lineIds = ['RUT:Line:1', 'RUT:Line:2', 'RUT:Line:3', 'RUT:Line:4', 'RUT:Line:5'];
-
-  const fields = lineIds.map((lineId, i) => {
-    return `l${i+1}: line(id: "${lineId}") {
-      publicCode
-      quays { id name latitude longitude stopPlace { id } }
-    }`;
-  }).join(' ');
-
-  try {
-    const res = await fetch(JP_API, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'ET-Client-Name': ET_CLIENT },
-      body: JSON.stringify({ query: `{ ${fields} }` }),
-    });
-    if (!res.ok) throw new Error('HTTP ' + res.status);
-    const json = await res.json();
-    if (json.errors) console.warn('[Discover] API errors:', JSON.stringify(json.errors));
-
-    // Build stopPlaceId -> station map
-    const stopMap = {};
-    Object.values(json?.data || {}).forEach(line => {
-      if (!line) return;
-      const lineNum = line.publicCode;
-      (line.quays || []).forEach(q => {
-        if (!q.latitude || !q.longitude) return;
-        const spId = q.stopPlace?.id || q.id;
-        if (!stopMap[spId]) {
-          stopMap[spId] = {
-            id: spId,
-            name: q.name,
-            lat: parseFloat(q.latitude),
-            lng: parseFloat(q.longitude),
-            lines: [],
-          };
-        }
-        if (!stopMap[spId].lines.includes(lineNum)) {
-          stopMap[spId].lines.push(lineNum);
-        }
-      });
-    });
-
-    const result = Object.values(stopMap);
-    result.forEach(s => s.lines.sort());
-    console.log(`[Discover] Found ${result.length} unique metro stops from Entur`);
-    return result;
-  } catch(e) {
-    console.warn('[Discover] Failed:', e.message);
-    return null;
-  }
-}
-
-// ═══════════════════════════════════════
+// ════════════════════════════════════════
 //  BOOT
-// ═══════════════════════════════════════
+// ════════════════════════════════════════
 async function boot() {
   setLoadMsg('Building map…');
   initMap();
 
-  setLoadMsg('Loading metro stops from Entur…');
-  const discovered = await discoverMetroStations();
+  setLoadMsg('Loading metro stops…');
+  const metroStops = await discoverStops(METRO_LINE_IDS, 'metro');
 
-  if (discovered && discovered.length > 0) {
-    // Replace hardcoded STATIONS with live authoritative data from Entur
-    STATIONS.length = 0;
-    discovered.forEach(s => STATIONS.push(s));
-    console.log(`[Boot] Loaded ${STATIONS.length} stations from Entur API`);
-  } else {
-    console.warn('[Boot] Discovery failed, using hardcoded fallback');
-    showToast('Using offline station data — positions may be approximate');
+  setLoadMsg('Loading tram stops…');
+  const tramStops = await discoverStops(TRAM_LINE_IDS, 'tram');
+
+  // Merge stops — a stop can serve both metro and tram
+  const merged = {};
+  [...metroStops, ...tramStops].forEach(s => {
+    if (!merged[s.id]) merged[s.id] = { ...s };
+    else {
+      s.lines.forEach(l => { if (!merged[s.id].lines.includes(l)) merged[s.id].lines.push(l); });
+      merged[s.id].lines.sort();
+    }
+  });
+  state.stops = Object.values(merged);
+  console.log(`[Boot] Total unique stops: ${state.stops.length}`);
+
+  if (!state.stops.length) {
+    showToast('⚠ Could not load stop data from Entur');
   }
 
-  setLoadMsg('Placing stations on map…');
-  renderStationMarkers();
+  setLoadMsg('Building filters…');
+  renderFilters();
 
-  setLoadMsg('Fetching live train positions…');
+  setLoadMsg('Placing stops on map…');
+  renderStopMarkers();
+
+  setLoadMsg('Fetching live vehicle positions…');
   const vehicles = await fetchVehicles();
-  if (vehicles !== null) {
-    updateTrainMarkers(vehicles);
-  } else {
-    showToast('⚠ Could not load vehicle positions');
-    document.getElementById('stat-trains').textContent = 'err';
-  }
+  if (vehicles !== null) updateVehicleMarkers(vehicles);
 
   document.getElementById('stat-time').textContent = nowTime();
   setLoadMsg('Ready!');
-
   setTimeout(hideLoading, 400);
   startCountdown();
 }

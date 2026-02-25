@@ -925,12 +925,73 @@ async function tick() {
 }
 
 // ═══════════════════════════════════════
+//  FETCH REAL COORDINATES FROM ENTUR
+// ═══════════════════════════════════════
+async function fetchRealCoordinates() {
+  // Query all station coordinates in one batch from Journey Planner
+  // Uses the stopPlace query which returns geometry (lat/lon)
+  const ids = STATIONS.map(s => s.id);
+  
+  // Batch into chunks of 20 to avoid huge queries
+  const CHUNK = 20;
+  const coordMap = {};
+  
+  for (let i = 0; i < ids.length; i += CHUNK) {
+    const chunk = ids.slice(i, i + CHUNK);
+    // Build a multi-alias query: each station gets an alias
+    const fields = chunk.map((id, j) => {
+      const alias = 's' + (i + j);
+      return `${alias}: stopPlace(id: "${id}") { id name latitude longitude }`;
+    }).join(' ');
+
+    const query = `{ ${fields} }`;
+    
+    try {
+      const res = await fetch(JP_API, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'ET-Client-Name': ET_CLIENT },
+        body: JSON.stringify({ query }),
+      });
+      if (!res.ok) continue;
+      const json = await res.json();
+      if (json.errors) console.warn('[Coords] errors:', json.errors);
+      const data = json?.data || {};
+      Object.values(data).forEach(place => {
+        if (place?.id && place?.latitude && place?.longitude) {
+          coordMap[place.id] = { lat: place.latitude, lng: place.longitude, name: place.name };
+        }
+      });
+    } catch(e) {
+      console.warn('[Coords] chunk failed:', e.message);
+    }
+  }
+  
+  return coordMap;
+}
+
+// ═══════════════════════════════════════
 //  BOOT
 // ═══════════════════════════════════════
 async function boot() {
   setLoadMsg('Building map…');
   initMap();
 
+  setLoadMsg('Fetching exact station coordinates from Entur…');
+  const coordMap = await fetchRealCoordinates();
+  
+  // Update STATIONS array with real coordinates
+  let updated = 0;
+  STATIONS.forEach(st => {
+    if (coordMap[st.id]) {
+      st.lat = coordMap[st.id].lat;
+      st.lng = coordMap[st.id].lng;
+      // Also correct name from official registry
+      if (coordMap[st.id].name) st.name = coordMap[st.id].name;
+      updated++;
+    }
+  });
+  console.log(`[Boot] Updated coordinates for ${updated}/${STATIONS.length} stations`);
+  
   setLoadMsg('Placing stations…');
   renderStationMarkers();
 

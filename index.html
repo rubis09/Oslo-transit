@@ -725,56 +725,46 @@ function updateApiStatus(ok, msg) {
 // ═══════════════════════════════════════
 //  DEPARTURES
 // ═══════════════════════════════════════
-const DEP_QUERY = `
-  query Departures($stopId: String!, $n: Int!) {
-    stopPlace(id: $stopId) {
-      estimatedCalls(
-        numberOfDepartures: $n
-        timeRange: 86400
-        omitNonBoarding: true
-      ) {
+async function fetchDepartures(stopId, count = 8) {
+  // Plain inline query (no variables) — matches confirmed working Entur API pattern
+  const query = `{
+    stopPlace(id: "${stopId}") {
+      estimatedCalls(numberOfDepartures: ${count}, timeRange: 7200) {
         realtime
         aimedDepartureTime
         expectedDepartureTime
         destinationDisplay { frontText }
-        serviceJourney {
-          journeyPattern {
-            line { publicCode }
-          }
-        }
+        serviceJourney { line { publicCode } }
       }
     }
-  }
-`;
-
-async function fetchDepartures(stopId, count = 8) {
+  }`;
   try {
     const res = await fetch(JP_API, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'ET-Client-Name': ET_CLIENT },
-      body: JSON.stringify({ query: DEP_QUERY, variables: { stopId, n: count } }),
+      body: JSON.stringify({ query }),
     });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const json = await res.json();
     if (json.errors) {
-      console.warn('[JP] errors:', json.errors);
+      console.warn('[JP] GraphQL errors:', JSON.stringify(json.errors));
       return [];
     }
     const calls = json?.data?.stopPlace?.estimatedCalls ?? [];
     return calls.map(c => {
-      const aimed = new Date(c.aimedDepartureTime);
+      const aimed    = new Date(c.aimedDepartureTime);
       const expected = new Date(c.expectedDepartureTime);
       const delaySec = Math.max(0, Math.round((expected - aimed) / 1000));
       return {
-        timeStr: formatDepTime(c.expectedDepartureTime),
-        dest: c.destinationDisplay?.frontText || '—',
-        line: c.serviceJourney?.journeyPattern?.line?.publicCode || '?',
+        timeStr:  formatDepTime(c.expectedDepartureTime),
+        dest:     c.destinationDisplay?.frontText || '—',
+        line:     c.serviceJourney?.line?.publicCode || '?',
         realtime: c.realtime,
         delaySec,
       };
     });
   } catch(e) {
-    console.warn('[JP]', e.message);
+    console.warn('[JP] fetch error:', e.message);
     return null;
   }
 }

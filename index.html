@@ -734,10 +734,14 @@ const DEP_QUERY = `
         omitNonBoarding: true
       ) {
         realtime
+        aimedDepartureTime
         expectedDepartureTime
         destinationDisplay { frontText }
-        serviceJourney { line { publicCode } }
-        delay
+        serviceJourney {
+          journeyPattern {
+            line { publicCode }
+          }
+        }
       }
     }
   }
@@ -757,13 +761,18 @@ async function fetchDepartures(stopId, count = 8) {
       return [];
     }
     const calls = json?.data?.stopPlace?.estimatedCalls ?? [];
-    return calls.map(c => ({
-      timeStr: formatDepTime(c.expectedDepartureTime),
-      dest: c.destinationDisplay?.frontText || '—',
-      line: c.serviceJourney?.line?.publicCode || '?',
-      realtime: c.realtime,
-      delaySec: c.delay || 0,
-    }));
+    return calls.map(c => {
+      const aimed = new Date(c.aimedDepartureTime);
+      const expected = new Date(c.expectedDepartureTime);
+      const delaySec = Math.max(0, Math.round((expected - aimed) / 1000));
+      return {
+        timeStr: formatDepTime(c.expectedDepartureTime),
+        dest: c.destinationDisplay?.frontText || '—',
+        line: c.serviceJourney?.journeyPattern?.line?.publicCode || '?',
+        realtime: c.realtime,
+        delaySec,
+      };
+    });
   } catch(e) {
     console.warn('[JP]', e.message);
     return null;

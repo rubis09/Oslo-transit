@@ -350,9 +350,12 @@ const TRAM_LINE_IDS  = ['RUT:Line:12','RUT:Line:13','RUT:Line:15','RUT:Line:17',
 // L13: Oslo S–Moss (regional, stops at all local stations)
 // L14: Oslo S–Eidsvoll via Gardermoen (airport line stops)
 // R10: Oslo S–Halden  (regional, major Oslo stops)
+// Lokaltog: kun L1 og L2 siden desember 2022
+// Regiontog gjennom Oslo: R12, R13, R14, R21, R22, R31
 const TRAIN_LINE_IDS = [
-  'VYG:Line:L1', 'VYG:Line:L2', 'VYG:Line:L12', 'VYG:Line:L13',
-  'VYG:Line:L14', 'VYG:Line:R10', 'VYG:Line:R11',
+  'VYG:Line:L1', 'VYG:Line:L2',
+  'VYG:Line:R12', 'VYG:Line:R13', 'VYG:Line:R14',
+  'VYG:Line:R21', 'VYG:Line:R22', 'VYG:Line:R31',
 ];
 
 // Dynamic registry populated at runtime from Entur API
@@ -370,14 +373,16 @@ const LINE_META = {
   '17': { color:'#22d3ee', label:'Rikshospitalet–Grefsen',  mode:'tram' },
   '18': { color:'#a3e635', label:'Rikshospitalet–Ljabru',   mode:'tram' },
   '19': { color:'#f87171', label:'Majorstuen–Ljabru',       mode:'tram' },
-  // Train colours (by line code, populated dynamically too)
-  'L1':  { color:'#60a5fa', label:'Spikkestad–Lillestrøm',  mode:'train' },
-  'L2':  { color:'#34d399', label:'Stabekk–Ski',            mode:'train' },
-  'L12': { color:'#a78bfa', label:'Oslo S–Ski',             mode:'train' },
-  'L13': { color:'#f9a8d4', label:'Oslo S–Moss',            mode:'train' },
-  'L14': { color:'#fcd34d', label:'Oslo S–Eidsvoll',        mode:'train' },
-  'R10': { color:'#6ee7b7', label:'Oslo S–Halden',          mode:'train' },
-  'R11': { color:'#93c5fd', label:'Oslo S–Skien',           mode:'train' },
+  // Lokaltog
+  'L1':  { color:'#60a5fa', label:'Spikkestad–Lillestrøm',      mode:'train' },
+  'L2':  { color:'#34d399', label:'Stabekk–Ski',                mode:'train' },
+  // Regiontog gjennom Oslo
+  'R12': { color:'#fcd34d', label:'Kongsberg–Drammen–Eidsvoll', mode:'train' },
+  'R13': { color:'#f9a8d4', label:'Drammen–Oslo S–Dal',         mode:'train' },
+  'R14': { color:'#a78bfa', label:'Asker–Oslo S–Kongsvinger',   mode:'train' },
+  'R21': { color:'#6ee7b7', label:'Stabekk–Oslo S–Moss',        mode:'train' },
+  'R22': { color:'#fb923c', label:'Oslo S–Rakkestad',           mode:'train' },
+  'R31': { color:'#93c5fd', label:'Oslo S–Gjøvik/Jaren',        mode:'train' },
 };
 
 // Called after API discovery to register new lines not in static meta
@@ -788,10 +793,8 @@ async function openDrawer(stop) {
   state.activeStop = stop;
   document.getElementById('drawer-name').textContent = stop.name;
   document.getElementById('drawer-meta').textContent = 'Fetching live departures…';
-  document.getElementById('drawer-line-badges').innerHTML = stop.lines.map(l => {
-    const isTram = lineMode(l) === 'tram';
-    return `<div class="lbadge ${isTram?'tram':''}" style="background:${lineColor(l)};width:20px;height:20px;font-size:10px">${l}</div>`;
-  }).join('');
+  // Show placeholder badges while loading — will be replaced with accurate data from API
+  document.getElementById('drawer-line-badges').innerHTML = '<span style="font-size:10px;color:var(--muted)">loading…</span>';
   document.getElementById('dep-grid').innerHTML = '<div class="dep-loading">⏳ Loading…</div>';
   document.getElementById('drawer').classList.add('open');
   await loadDrawerDeps(stop);
@@ -801,20 +804,36 @@ async function loadDrawerDeps(stop) {
   const deps = await fetchDepartures(stop.id, 8);
   document.getElementById('drawer-meta').textContent = `Next departures · ${nowTime()}`;
   if (deps === null) {
+    document.getElementById('drawer-line-badges').innerHTML = '';
     document.getElementById('dep-grid').innerHTML = '<div class="dep-empty">⚠ Could not load departures</div>';
     return;
   }
   if (!deps.length) {
+    document.getElementById('drawer-line-badges').innerHTML = '';
     document.getElementById('dep-grid').innerHTML = '<div class="dep-empty">No upcoming departures</div>';
     return;
   }
+
+  // Derive line badges from ACTUAL departures — never from stop.lines
+  // This guarantees we only show lines that genuinely serve this stop right now
+  const seenLines = [];
+  deps.forEach(d => { if (!seenLines.includes(d.line)) seenLines.push(d.line); });
+  document.getElementById('drawer-line-badges').innerHTML = seenLines.map(l => {
+    const isTram  = lineMode(l) === 'tram';
+    const isTrain = lineMode(l) === 'train';
+    const shape   = isTrain ? '' : isTram ? 'tram' : '';
+    return `<div class="lbadge ${shape}" style="background:${lineColor(l)};width:20px;height:20px;font-size:10px">${l}</div>`;
+  }).join('');
+
   document.getElementById('dep-grid').innerHTML = deps.map(d => {
-    const col = lineColor(d.line);
-    const isTram = lineMode(d.line) === 'tram';
-    const delMin = Math.round(d.delaySec / 60);
+    const col     = lineColor(d.line);
+    const isTram  = lineMode(d.line) === 'tram';
+    const isTrain = lineMode(d.line) === 'train';
+    const shape   = isTrain ? 'train' : isTram ? 'tram' : 'metro';
+    const delMin  = Math.round(d.delaySec / 60);
     return `<div class="dep-card">
       <div class="dep-header">
-        <div class="dep-badge ${isTram?'tram':'metro'}" style="background:${col}">${d.line}</div>
+        <div class="dep-badge ${shape}" style="background:${col}">${d.line}</div>
         <div>
           <div class="dep-time">${d.timeStr}</div>
           ${delMin > 0 ? `<div class="dep-delay">+${delMin} min</div>` : ''}
